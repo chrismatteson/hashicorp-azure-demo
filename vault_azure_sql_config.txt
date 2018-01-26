@@ -1,0 +1,47 @@
+#Mount DB backend
+vault mount -path=azuresql database
+
+#Write our config to database
+vault write azuresql/config/vault \
+    plugin_name=mssql-database-plugin \
+    connection_url='server=cmattesonsqlserver.database.windows.net; user id=dbadmin; password=Password1; database=llarsensqldatabase;' \
+    allowed_roles="read"
+
+#Write out our role
+vault write azuresql/roles/read \
+    db_name=vault \
+    creation_statements="CREATE USER [{{name}}] WITH PASSWORD = '{{password}}';GRANT SELECT ON dbo.hello TO [{{name}}]" \
+    revocation_statements="DROP USER IF EXISTS [{{name}}]" \
+    default_ttl="1m" \
+    max_ttl="1m"
+
+#Check config and read out a credential
+vault read azuresql/roles/read
+vault read azuresql/creds/read
+
+#Vault Policies for our container app
+vault write sys/policy/azuresql rules=@azuresql.hcl
+
+#Allow the container app to read our Azure creds
+path "azuresql/creds/read" {
+  capabilities = ["read"]
+}
+
+#Create Table
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Hello](
+	[HelloId] [int] IDENTITY(1,1) NOT NULL,
+	[Text] [nvarchar](128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+) ON [PRIMARY]
+GO
+
+
+#Proxies
+
+#Consul
+ssh -L 8500:172.31.48.4:8500 azure-user@40.78.110.48
+#Nodejs
+ssh -L 3000:172.31.48.4:3000 azure-user@40.78.110.48
